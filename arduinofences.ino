@@ -4,7 +4,7 @@
 
 int RECV_PIN = 4;
 int BUTTON_PIN = 5;
-int STATUS_PIN = 13;
+int STATUS_PIN = 6;
 
 IRrecv irrecv(RECV_PIN);
 IRsend irsend;
@@ -14,9 +14,8 @@ decode_results results;
 #define WIRELESS_MODE_INFRA	1
 #define WIRELESS_MODE_ADHOC	2
 
-#define ledPin1 13
-#define ledPin2 13
-#define ledPin3 13
+#define ledPin1 6
+#define ledPin2 7
 
 // Wireless configuration parameters ----------------------------------------
 unsigned char local_ip[] = {10,0,0,50};	// IP address of WiShield
@@ -64,20 +63,18 @@ void setup()
     // Initialize WiServer and have it use the sendMyPage function to serve pages
     pinMode(ledPin1, OUTPUT);
     pinMode(ledPin2, OUTPUT);
-    pinMode(ledPin3, OUTPUT);
   
     //WiFi.init();
     WiServer.init(sendPage);
     WiServer.enableVerboseMode(true);
     states[0] = false;
     states[1] = false;
-    states[2] = false;
     Serial.println("Started webserver ...");
 }
 
 void printStates()
 {
-        for (stateCounter = 0 ; stateCounter < 3; stateCounter++)
+        for (stateCounter = 0 ; stateCounter < 2; stateCounter++)
         {
             boolToString(states[stateCounter], stateBuff);
            
@@ -93,7 +90,6 @@ void writeStates()
         //set led states
         digitalWrite(ledPin1, states[0]);
         digitalWrite(ledPin2, states[1]);
-        digitalWrite(ledPin3, states[2]);
 }
 
 void boolToString (boolean test, char returnBuffer[4])
@@ -142,7 +138,7 @@ boolean sendPage(char* URL) {
       WiServer.print("<html><head><title>Led switch</title></head>");
     
       WiServer.print("<body><center>Please select the led state:<center>\n<center>");
-      for (stateCounter = 0; stateCounter < 3; stateCounter++) //for each led
+      for (stateCounter = 0; stateCounter < 2; stateCounter++) //for each led
       {
         numAsCharBuff[0] = (char)(stateCounter + 49); //as this is displayed use 1 - 3 rather than 0 - 2
         numAsCharBuff[1] = '\0'; //strcat expects a string (array of chars) rather than a single character.
@@ -167,10 +163,11 @@ boolean sendPage(char* URL) {
         WiServer.print("</html> ");
         return true;
    }
+   else {
+     WiServer.print(" ");
+     return true;
+   }
 }
-
-// This is the webpage that is served up by the webserver
-const prog_char webpage[] PROGMEM = {"HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<center><h1>Hello World!! I am WiShield</h1><form method=\"get\" action=\"0\">Toggle LED:<input type=\"submit\" name=\"0\" value=\"LED1\"></input></form></center>"};
 
 // Storage for the recorded code
 int codeType = -1; // The type of code
@@ -293,7 +290,7 @@ void ir_loop() {
     digitalWrite(STATUS_PIN, HIGH);
     sendCode(lastButtonState == buttonState);
     digitalWrite(STATUS_PIN, LOW);
-    delay(1000); // Wait a bit between retransmissions
+    delay(10); // Wait a bit between retransmissions
   } 
   else if (irrecv.decode(&results)) {
     digitalWrite(STATUS_PIN, HIGH);
@@ -306,7 +303,7 @@ void ir_loop() {
 
 void loop()
 {
-  ir_loop();
+  //ir_loop();
   WiServer.server_task();
 
   delay(10);
