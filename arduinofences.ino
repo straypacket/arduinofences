@@ -1,10 +1,5 @@
-/*
- * Web Server
- *
- * A simple web server example using the WiShield 1.0
- */
-
-#include <WiShield.h>
+//#include <WiShield.h>
+#include <WiServer.h>
 #include <IRremote.h>
 
 int RECV_PIN = 4;
@@ -19,9 +14,13 @@ decode_results results;
 #define WIRELESS_MODE_INFRA	1
 #define WIRELESS_MODE_ADHOC	2
 
+#define ledPin1 13
+#define ledPin2 13
+#define ledPin3 13
+
 // Wireless configuration parameters ----------------------------------------
-unsigned char local_ip[] = {192,168,13,50};	// IP address of WiShield
-unsigned char gateway_ip[] = {192,168,13,1};	// router or gateway IP address
+unsigned char local_ip[] = {10,0,0,50};	// IP address of WiShield
+unsigned char gateway_ip[] = {10,0,0,1};	// router or gateway IP address
 unsigned char subnet_mask[] = {255,255,255,0};	// subnet mask for the local network
 const prog_char ssid[] PROGMEM = {"arduino"};		// max 32 bytes
 
@@ -45,6 +44,14 @@ unsigned char wireless_mode = WIRELESS_MODE_INFRA;
 
 unsigned char ssid_len;
 unsigned char security_passphrase_len;
+
+boolean states[3]; //holds led states
+char stateCounter; //used as a temporary variable
+char tmpStrCat[64]; //used in processing the web page
+char stateBuff[4]; //used in text processing around boolToString()
+char numAsCharBuff[2];
+char ledChange;
+
 //---------------------------------------------------------------------------
 
 void setup()
@@ -54,8 +61,112 @@ void setup()
     pinMode(STATUS_PIN, OUTPUT);
     Serial.begin(9600);
     
-    WiFi.init();
+    // Initialize WiServer and have it use the sendMyPage function to serve pages
+    pinMode(ledPin1, OUTPUT);
+    pinMode(ledPin2, OUTPUT);
+    pinMode(ledPin3, OUTPUT);
+  
+    //WiFi.init();
+    WiServer.init(sendPage);
+    WiServer.enableVerboseMode(true);
+    states[0] = false;
+    states[1] = false;
+    states[2] = false;
     Serial.println("Started webserver ...");
+}
+
+void printStates()
+{
+        for (stateCounter = 0 ; stateCounter < 3; stateCounter++)
+        {
+            boolToString(states[stateCounter], stateBuff);
+           
+            Serial.print("State of ");
+            Serial.print(stateCounter);
+            Serial.print(": ");
+            Serial.println(stateBuff);
+        } 
+}
+
+void writeStates()
+{
+        //set led states
+        digitalWrite(ledPin1, states[0]);
+        digitalWrite(ledPin2, states[1]);
+        digitalWrite(ledPin3, states[2]);
+}
+
+void boolToString (boolean test, char returnBuffer[4])
+{
+  returnBuffer[0] = '\0';
+  if (test)
+  {
+    strcat(returnBuffer, "On");
+  }
+  else
+  {
+    strcat(returnBuffer, "Off");
+  }
+}
+
+// This is our page serving function that generates web pages
+boolean sendPage(char* URL) {
+  
+  Serial.println("Page printing begun");
+  
+    printStates();
+    writeStates();
+    
+  //check whether we need to change the led state
+  if (URL[1] == '?' && URL[2] == 'L' && URL[3] == 'E' && URL[4] == 'D') //url has a leading /
+  {
+    ledChange = (int)(URL[5] - 48); //get the led to change.
+    
+    for (stateCounter = 0 ; stateCounter < 3; stateCounter++)
+    {
+      if (ledChange == stateCounter)
+      {
+        states[stateCounter] = !states[stateCounter];
+            Serial.print("Have changed ");
+            Serial.println(ledChange);
+      }
+    }
+    
+    //after having change state, return the user to the index page.
+    WiServer.print("<HTML><HEAD><meta http-equiv='REFRESH' content='0;url=/'></HEAD></HTML>");
+    return true;
+  }
+  
+  if (strcmp(URL, "/") == false) //why is this not true?
+   {
+      WiServer.print("<html><head><title>Led switch</title></head>");
+    
+      WiServer.print("<body><center>Please select the led state:<center>\n<center>");
+      for (stateCounter = 0; stateCounter < 3; stateCounter++) //for each led
+      {
+        numAsCharBuff[0] = (char)(stateCounter + 49); //as this is displayed use 1 - 3 rather than 0 - 2
+        numAsCharBuff[1] = '\0'; //strcat expects a string (array of chars) rather than a single character.
+                                 //This string is a character plus string terminator.
+        
+        tmpStrCat[0] = '\0'; //initialise string
+        strcat(tmpStrCat, "<a href=?LED"); //start the string
+        tmpStrCat[12] = (char)(stateCounter + 48); //add the led number
+        tmpStrCat[13] = '\0'; //terminate the string properly for later.
+    
+        strcat(tmpStrCat, ">Led ");
+        strcat(tmpStrCat, numAsCharBuff);
+        strcat(tmpStrCat, ": ");
+        
+        boolToString(states[stateCounter], stateBuff);
+        strcat(tmpStrCat, stateBuff);
+        strcat(tmpStrCat, "</a> "); //we now have something in the range of <a href=?LED0>Led 0: Off</a>
+    
+        WiServer.print(tmpStrCat);
+      }
+
+        WiServer.print("</html> ");
+        return true;
+   }
 }
 
 // This is the webpage that is served up by the webserver
@@ -67,6 +178,8 @@ unsigned long codeValue; // The code value if not raw
 unsigned int rawCodes[RAWBUF]; // The durations if raw
 int codeLen; // The length of the code
 int toggle = 0; // The RC5/6 toggle state
+
+int lastButtonState;
 
 // Stores the code for later playback
 // Most of this code is just logging
@@ -167,8 +280,6 @@ void sendCode(int repeat) {
   }
 }
 
-int lastButtonState;
-
 void ir_loop() {
   // If button pressed, send the code.
   int buttonState = digitalRead(BUTTON_PIN);
@@ -196,5 +307,7 @@ void ir_loop() {
 void loop()
 {
   ir_loop();
-  WiFi.run();
+  WiServer.server_task();
+
+  delay(10);
 }
