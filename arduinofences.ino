@@ -53,7 +53,8 @@ void setup()
     pinMode(BUTTON_PIN, INPUT);
     pinMode(STATUS_PIN, OUTPUT);
     Serial.begin(9600);
-    //WiFi.init();
+    
+    WiFi.init();
     Serial.println("Started webserver ...");
 }
 
@@ -168,8 +169,7 @@ void sendCode(int repeat) {
 
 int lastButtonState;
 
-void loop()
-{
+void ir_loop() {
   // If button pressed, send the code.
   int buttonState = digitalRead(BUTTON_PIN);
   if (lastButtonState == HIGH && buttonState == LOW) {
@@ -191,4 +191,10 @@ void loop()
     digitalWrite(STATUS_PIN, LOW);
   }
   lastButtonState = buttonState;
+}
+
+void loop()
+{
+  ir_loop();
+  WiFi.run();
 }
