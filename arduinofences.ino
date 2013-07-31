@@ -2,9 +2,8 @@
 #include <WiServer.h>
 #include <IRremote.h>
 
-int RECV_PIN = 4;
-int BUTTON_PIN = 5;
-int STATUS_PIN = 6;
+int RECV_PIN = 5;
+int BUTTON_PIN = 6;
 
 IRrecv irrecv(RECV_PIN);
 IRsend irsend;
@@ -14,8 +13,7 @@ decode_results results;
 #define WIRELESS_MODE_INFRA	1
 #define WIRELESS_MODE_ADHOC	2
 
-#define ledPin1 6
-#define ledPin2 7
+#define ledPin1 4
 
 // Wireless configuration parameters ----------------------------------------
 unsigned char local_ip[] = {10,0,0,50};	// IP address of WiShield
@@ -44,7 +42,7 @@ unsigned char wireless_mode = WIRELESS_MODE_INFRA;
 unsigned char ssid_len;
 unsigned char security_passphrase_len;
 
-boolean states[3]; //holds led states
+boolean states[1]; //holds led states
 char stateCounter; //used as a temporary variable
 char tmpStrCat[64]; //used in processing the web page
 char stateBuff[4]; //used in text processing around boolToString()
@@ -57,24 +55,23 @@ void setup()
 {
     irrecv.enableIRIn(); // Start the receiver
     pinMode(BUTTON_PIN, INPUT);
-    pinMode(STATUS_PIN, OUTPUT);
     Serial.begin(9600);
     
     // Initialize WiServer and have it use the sendMyPage function to serve pages
     pinMode(ledPin1, OUTPUT);
-    pinMode(ledPin2, OUTPUT);
+    pinMode(RECV_PIN, INPUT);
+    pinMode(BUTTON_PIN, INPUT);
   
     //WiFi.init();
     WiServer.init(sendPage);
     WiServer.enableVerboseMode(true);
     states[0] = false;
-    states[1] = false;
     Serial.println("Started webserver ...");
 }
 
 void printStates()
 {
-        for (stateCounter = 0 ; stateCounter < 2; stateCounter++)
+        for (stateCounter = 0 ; stateCounter < 1; stateCounter++)
         {
             boolToString(states[stateCounter], stateBuff);
            
@@ -89,7 +86,6 @@ void writeStates()
 {
         //set led states
         digitalWrite(ledPin1, states[0]);
-        digitalWrite(ledPin2, states[1]);
 }
 
 void boolToString (boolean test, char returnBuffer[4])
@@ -118,13 +114,15 @@ boolean sendPage(char* URL) {
   {
     ledChange = (int)(URL[5] - 48); //get the led to change.
     
-    for (stateCounter = 0 ; stateCounter < 3; stateCounter++)
+    for (stateCounter = 0 ; stateCounter < 1; stateCounter++)
     {
       if (ledChange == stateCounter)
       {
         states[stateCounter] = !states[stateCounter];
             Serial.print("Have changed ");
             Serial.println(ledChange);
+            Serial.print("Sending RFID .... ");
+            sendCode();
       }
     }
     
@@ -132,13 +130,14 @@ boolean sendPage(char* URL) {
     WiServer.print("<HTML><HEAD><meta http-equiv='REFRESH' content='0;url=/'></HEAD></HTML>");
     return true;
   }
+ 
   
   if (strcmp(URL, "/") == false) //why is this not true?
    {
       WiServer.print("<html><head><title>Led switch</title></head>");
     
       WiServer.print("<body><center>Please select the led state:<center>\n<center>");
-      for (stateCounter = 0; stateCounter < 2; stateCounter++) //for each led
+      for (stateCounter = 0; stateCounter < 1; stateCounter++) //for each led
       {
         numAsCharBuff[0] = (char)(stateCounter + 49); //as this is displayed use 1 - 3 rather than 0 - 2
         numAsCharBuff[1] = '\0'; //strcat expects a string (array of chars) rather than a single character.
@@ -164,7 +163,6 @@ boolean sendPage(char* URL) {
         return true;
    }
    else {
-     WiServer.print(" ");
      return true;
    }
 }
@@ -183,25 +181,29 @@ int lastButtonState;
 void storeCode(decode_results *results) {
   codeType = results->decode_type;
   int count = results->rawlen;
+  
   if (codeType == UNKNOWN) {
     Serial.println("Received unknown code, saving as raw");
+
     codeLen = results->rawlen - 1;
     // To store raw codes:
     // Drop first value (gap)
     // Convert from ticks to microseconds
     // Tweak marks shorter, and spaces longer to cancel out IR receiver distortion
     for (int i = 1; i <= codeLen; i++) {
+      /*
       if (i % 2) {
         // Mark
-        rawCodes[i - 1] = results->rawbuf[i]*USECPERTICK - MARK_EXCESS;
+        //rawCodes[i - 1] = results->rawbuf[i]*USECPERTICK - MARK_EXCESS;
         Serial.print(" m");
-      } 
+      }
       else {
         // Space
-        rawCodes[i - 1] = results->rawbuf[i]*USECPERTICK + MARK_EXCESS;
+        //rawCodes[i - 1] = results->rawbuf[i]*USECPERTICK + MARK_EXCESS;
         Serial.print(" s");
       }
-      Serial.print(rawCodes[i - 1], DEC);
+      //Serial.print(rawCodes[i - 1], DEC);
+      */
     }
     Serial.println("");
   }
@@ -232,30 +234,25 @@ void storeCode(decode_results *results) {
     codeValue = results->value;
     codeLen = results->bits;
   }
+  
 }
 
-void sendCode(int repeat) {
+void sendCode() {
+  Serial.print("1");
   if (codeType == NEC) {
-    if (repeat) {
-      irsend.sendNEC(REPEAT, codeLen);
-      Serial.println("Sent NEC repeat");
-    } 
-    else {
-      irsend.sendNEC(codeValue, codeLen);
-      Serial.print("Sent NEC ");
-      Serial.println(codeValue, HEX);
-    }
+    Serial.print("Sent NEC ");
+    Serial.println(codeValue, HEX);
+    irsend.sendNEC(codeValue, codeLen);
   } 
   else if (codeType == SONY) {
-    irsend.sendSony(codeValue, codeLen);
     Serial.print("Sent Sony ");
     Serial.println(codeValue, HEX);
+    irsend.sendSony(codeValue, codeLen);
   } 
   else if (codeType == RC5 || codeType == RC6) {
-    if (!repeat) {
-      // Flip the toggle bit for a new button press
-      toggle = 1 - toggle;
-    }
+    // Flip the toggle bit for a new button press
+    toggle = 1 - toggle;
+    
     // Put the toggle bit into the code to send
     codeValue = codeValue & ~(1 << (codeLen - 1));
     codeValue = codeValue | (toggle << (codeLen - 1));
@@ -265,46 +262,33 @@ void sendCode(int repeat) {
       irsend.sendRC5(codeValue, codeLen);
     } 
     else {
-      irsend.sendRC6(codeValue, codeLen);
       Serial.print("Sent RC6 ");
       Serial.println(codeValue, HEX);
+      irsend.sendRC6(codeValue, codeLen);
     }
-  } 
-  else if (codeType == UNKNOWN /* i.e. raw */) {
+  }
+  else if (codeType == UNKNOWN) {
     // Assume 38 KHz
-    irsend.sendRaw(rawCodes, codeLen, 38);
     Serial.println("Sent raw");
+    irsend.sendRaw(rawCodes, codeLen, 38);
   }
-}
-
-void ir_loop() {
-  // If button pressed, send the code.
-  int buttonState = digitalRead(BUTTON_PIN);
-  if (lastButtonState == HIGH && buttonState == LOW) {
-    Serial.println("Released");
-    irrecv.enableIRIn(); // Re-enable receiver
-  }
-
-  if (buttonState) {
-    Serial.println("Pressed, sending");
-    digitalWrite(STATUS_PIN, HIGH);
-    sendCode(lastButtonState == buttonState);
-    digitalWrite(STATUS_PIN, LOW);
-    delay(10); // Wait a bit between retransmissions
-  } 
-  else if (irrecv.decode(&results)) {
-    digitalWrite(STATUS_PIN, HIGH);
-    storeCode(&results);
-    irrecv.resume(); // resume receiver
-    digitalWrite(STATUS_PIN, LOW);
-  }
-  lastButtonState = buttonState;
+  Serial.print("2");
 }
 
 void loop()
 {
-  //ir_loop();
-  WiServer.server_task();
+  int buttonState = digitalRead(BUTTON_PIN);
 
-  delay(10);
+  if (buttonState == HIGH) {
+    if (irrecv.decode(&results)) {
+      storeCode(&results);
+      irrecv.resume(); // resume receiver
+    }
+  }
+  else {
+    sendCode();
+  }
+  lastButtonState = buttonState;
+   
+  WiServer.server_task();
 }
