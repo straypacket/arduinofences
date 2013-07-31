@@ -270,7 +270,7 @@ void sendCode() {
   else if (codeType == UNKNOWN) {
     // Assume 38 KHz
     Serial.println("Sent raw");
-    irsend.sendRaw(rawCodes, codeLen, 38);
+    //irsend.sendRaw(rawCodes, codeLen, 38);
   }
   Serial.print("2");
 }
