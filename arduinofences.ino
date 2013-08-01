@@ -4,6 +4,7 @@
 
 int RECV_PIN = 5;
 int BUTTON_PIN = 6;
+int ANALOG_LIGHT_PIN = 1;
 
 IRrecv irrecv(RECV_PIN);
 IRsend irsend;
@@ -61,6 +62,7 @@ void setup()
     pinMode(ledPin1, OUTPUT);
     pinMode(RECV_PIN, INPUT);
     pinMode(BUTTON_PIN, INPUT);
+    pinMode(ANALOG_LIGHT_PIN, INPUT);
   
     //WiFi.init();
     WiServer.init(sendPage);
@@ -149,6 +151,7 @@ int codeType = -1; // The type of code
 unsigned long codeValue; // The code value if not raw
 int codeLen; // The length of the code
 int toggle = 0; // The RC5/6 toggle state
+unsigned long sentLockMillis = 0;
 
 int lastButtonState;
 
@@ -225,9 +228,24 @@ void sendCode() {
   }
 }
 
+void sendCodeOnce() {
+  unsigned long time = millis();
+
+  if ( (time - sentLockMillis) > 10000) { //10 seconds
+    Serial.println("Sending once");
+    sendCode();
+    sentLockMillis = time;
+  }
+}
+
 void loop()
 {
   int buttonState = digitalRead(BUTTON_PIN);
+  int lightValue = analogRead(ANALOG_LIGHT_PIN);
+  
+  if (lightValue < 200) {
+    sendCodeOnce();
+  }
 
   if (buttonState == HIGH) {
     if (irrecv.decode(&results)) {
