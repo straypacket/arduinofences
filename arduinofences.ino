@@ -69,34 +69,19 @@ void setup()
     Serial.println("Started webserver ...");
 }
 
-void printStates()
-{
-        for (stateCounter = 0 ; stateCounter < 1; stateCounter++)
-        {
+void changeStates() {
+        for (stateCounter = 0 ; stateCounter < 1; stateCounter++) {
             boolToString(states[stateCounter], stateBuff);
-           
-            Serial.print("State of ");
-            Serial.print(stateCounter);
-            Serial.print(": ");
-            Serial.println(stateBuff);
+            digitalWrite(ledPin1, states[stateCounter]);
         } 
 }
 
-void writeStates()
-{
-        //set led states
-        digitalWrite(ledPin1, states[0]);
-}
-
-void boolToString (boolean test, char returnBuffer[4])
-{
+void boolToString (boolean test, char returnBuffer[4]) {
   returnBuffer[0] = '\0';
-  if (test)
-  {
+  if (test) {
     strcat(returnBuffer, "On");
   }
-  else
-  {
+  else {
     strcat(returnBuffer, "Off");
   }
 }
@@ -104,25 +89,17 @@ void boolToString (boolean test, char returnBuffer[4])
 // This is our page serving function that generates web pages
 boolean sendPage(char* URL) {
   
-  Serial.println("Page printing begun");
-  
-    printStates();
-    writeStates();
+  changeStates();
     
   //check whether we need to change the led state
-  if (URL[1] == '?' && URL[2] == 'L' && URL[3] == 'E' && URL[4] == 'D') //url has a leading /
-  {
+  if (URL[1] == '?' && URL[2] == 'L' && URL[3] == 'E' && URL[4] == 'D') { //url has a leading /
     ledChange = (int)(URL[5] - 48); //get the led to change.
     
-    for (stateCounter = 0 ; stateCounter < 1; stateCounter++)
-    {
-      if (ledChange == stateCounter)
-      {
+    for (stateCounter = 0 ; stateCounter < 1; stateCounter++) {
+      if (ledChange == stateCounter) {
         states[stateCounter] = !states[stateCounter];
-            Serial.print("Have changed ");
-            Serial.println(ledChange);
-            Serial.print("Sending RFID .... ");
-            sendCode();
+        Serial.print("Sending RFID .... ");
+        sendCode();
       }
     }
     
@@ -163,14 +140,13 @@ boolean sendPage(char* URL) {
         return true;
    }
    else {
-     return true;
+     return false;
    }
 }
 
 // Storage for the recorded code
 int codeType = -1; // The type of code
 unsigned long codeValue; // The code value if not raw
-unsigned int rawCodes[RAWBUF]; // The durations if raw
 int codeLen; // The length of the code
 int toggle = 0; // The RC5/6 toggle state
 
@@ -183,29 +159,7 @@ void storeCode(decode_results *results) {
   int count = results->rawlen;
   
   if (codeType == UNKNOWN) {
-    Serial.println("Received unknown code, saving as raw");
-
-    codeLen = results->rawlen - 1;
-    // To store raw codes:
-    // Drop first value (gap)
-    // Convert from ticks to microseconds
-    // Tweak marks shorter, and spaces longer to cancel out IR receiver distortion
-    for (int i = 1; i <= codeLen; i++) {
-      /*
-      if (i % 2) {
-        // Mark
-        //rawCodes[i - 1] = results->rawbuf[i]*USECPERTICK - MARK_EXCESS;
-        Serial.print(" m");
-      }
-      else {
-        // Space
-        //rawCodes[i - 1] = results->rawbuf[i]*USECPERTICK + MARK_EXCESS;
-        Serial.print(" s");
-      }
-      //Serial.print(rawCodes[i - 1], DEC);
-      */
-    }
-    Serial.println("");
+    //Serial.println("Received unknown code, ignoring");
   }
   else {
     if (codeType == NEC) {
@@ -238,7 +192,6 @@ void storeCode(decode_results *results) {
 }
 
 void sendCode() {
-  Serial.print("1");
   if (codeType == NEC) {
     Serial.print("Sent NEC ");
     Serial.println(codeValue, HEX);
@@ -268,11 +221,8 @@ void sendCode() {
     }
   }
   else if (codeType == UNKNOWN) {
-    // Assume 38 KHz
-    Serial.println("Sent raw");
-    //irsend.sendRaw(rawCodes, codeLen, 38);
+    //Serial.println("Ignoring unknown code");
   }
-  Serial.print("2");
 }
 
 void loop()
@@ -287,6 +237,7 @@ void loop()
   }
   else {
     sendCode();
+  //  delay(500);
   }
   lastButtonState = buttonState;
    
