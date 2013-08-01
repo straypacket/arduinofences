@@ -230,7 +230,6 @@ void loop()
   int buttonState = digitalRead(BUTTON_PIN);
 
   if (buttonState == HIGH) {
-    Serial.println("Feed me");
     if (irrecv.decode(&results)) {
       storeCode(&results);
       irrecv.resume(); // resume receiver
