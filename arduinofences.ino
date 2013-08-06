@@ -56,6 +56,27 @@ float prevHumidity = 0;
 
 //---------------------------------------------------------------------------
 
+// Server IP Address
+uint8 ip[] = {10,0,0,5};
+
+// Request to server
+String string_request = String("/?");
+char request[99];
+
+// A request that sends the latest data
+GETrequest getWeather(ip, 4567, "10.0.0.5", request);
+
+// Function that prints data from the server
+void printData(char* data, int len) {
+  
+  // Print the data returned by the server
+  // Note that the data is not null-terminated, may be broken up into smaller packets, and 
+  // includes the HTTP header. 
+  while (len-- > 0) {
+    Serial.print(*(data++));
+  }
+}
+
 void setup()
 {
     irrecv.enableIRIn(); // Start the receiver
@@ -69,10 +90,11 @@ void setup()
     pinMode(ANALOG_LIGHTSENSOR_PIN, INPUT);
   
     //WiFi.init();
-    WiServer.init(sendPage);
-    WiServer.enableVerboseMode(true);
+    WiServer.init(NULL);
+    WiServer.enableVerboseMode(false);
     states[0] = false;
-    Serial.println("Started webserver ...");
+    // Have the processData function called when data is returned by the server
+    //getWeather.setReturnFunc(printData);
 }
 
 void changeStates() {
@@ -90,68 +112,6 @@ void boolToString (boolean test, char returnBuffer[4]) {
   else {
     strcat(returnBuffer, "Off");
   }
-}
-
-// This is our page serving function that generates web pages
-boolean sendPage(char* URL) {
-  
-  changeStates();
-    
-  //check whether we need to change the led state
-  if (URL[1] == '?' && URL[2] == 'L' && URL[3] == 'E' && URL[4] == 'D') { //url has a leading /
-    ledChange = (int)(URL[5] - 48); //get the led to change.
-    
-    for (stateCounter = 0 ; stateCounter < 1; stateCounter++) {
-      if (ledChange == stateCounter) {
-        states[stateCounter] = !states[stateCounter];
-        Serial.print("Sending RFID .... ");
-        sendCode();
-      }
-    }
-    
-    //after having change state, return the user to the index page.
-    WiServer.print("<HTML><HEAD><meta http-equiv='REFRESH' content='0;url=/'></HEAD></HTML>");
-    return true;
-  }
- 
-  
-  if (strcmp(URL, "/") == false) //why is this not true?
-   {
-      WiServer.print("<html><head><title>Led switch</title></head>");
-    
-      WiServer.print("<body><center>Temperature: ");
-      WiServer.print(prevTemp);
-      WiServer.print("C</br>Humidity: ");
-      WiServer.print(prevHumidity);
-      WiServer.print("%</br>");
-      for (stateCounter = 0; stateCounter < 1; stateCounter++) //for each led
-      {
-        numAsCharBuff[0] = (char)(stateCounter + 49); //as this is displayed use 1 - 3 rather than 0 - 2
-        numAsCharBuff[1] = '\0'; //strcat expects a string (array of chars) rather than a single character.
-                                 //This string is a character plus string terminator.
-        
-        tmpStrCat[0] = '\0'; //initialise string
-        strcat(tmpStrCat, "<a href=?LED"); //start the string
-        tmpStrCat[12] = (char)(stateCounter + 48); //add the led number
-        tmpStrCat[13] = '\0'; //terminate the string properly for later.
-    
-        strcat(tmpStrCat, ">Led ");
-        strcat(tmpStrCat, numAsCharBuff);
-        strcat(tmpStrCat, ": ");
-        
-        boolToString(states[stateCounter], stateBuff);
-        strcat(tmpStrCat, stateBuff);
-        strcat(tmpStrCat, "</a> "); //we now have something in the range of <a href=?LED0>Led 0: Off</a>
-    
-        WiServer.print(tmpStrCat);
-      }
-
-        WiServer.print("</body></html>");
-        return true;
-   }
-   else {
-     return false;
-   }
 }
 
 // Storage for the recorded code
@@ -253,7 +213,7 @@ void readTempHumidity() {
 
       switch (chk)
       {
-        case 0: Serial.println("OK"); break;
+        case 0: break;
         case -1: Serial.println("Checksum error"); break;
         case -2: Serial.println("Time out error"); break;
         default: Serial.println("Unknown error"); break;
@@ -261,12 +221,36 @@ void readTempHumidity() {
       
       prevTemp = (float)DHT11.temperature;
       prevHumidity = (float)DHT11.humidity;
-      //Serial.println((float)DHT11.humidity, DEC);
-      //Serial.println((float)DHT11.temperature, DEC);
+      
+      // Reset string
+      string_request = String("/?");
+      
+      char temp[10];
+      if (prevTemp > 10) {
+        dtostrf(prevTemp, 4, 2, temp);
+      }
+      else {
+        dtostrf(prevTemp, 4, 3, temp);
+      }
+      
+      char humid[10];
+      if (prevHumidity > 10) {
+        dtostrf(prevHumidity, 4, 2, humid);
+      }
+      else {
+        dtostrf(prevHumidity, 4, 3, humid);
+      }
+      
+      string_request = string_request + String("tmp=") + String(temp);
+      string_request = string_request + String("&hum=") + String(humid);
+      string_request.toCharArray(request,100);
 
       tempLockMillis = time;
     }
 }
+
+// Time (in millis) when the data should be retrieved 
+long updateTime = 0;
 
 void loop()
 {
@@ -278,6 +262,13 @@ void loop()
   }
 
   readTempHumidity();
+  
+  // Check if it's time to get an update
+  if (millis() >= updateTime) {
+    getWeather.submit();    
+    // Get another update one hour from now
+    updateTime += 1000 * 1;
+  }
   
   // We use analog in as we don't have any other digital
   // inputs, needed for sensors

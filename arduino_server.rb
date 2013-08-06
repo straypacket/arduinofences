@@ -18,9 +18,15 @@ encoding_options = {
 set :bind, '0.0.0.0'
  
 get '/' do
-  p params["foo"]
+  if params["api"] and params["tmp"] and params["hum"]
+    p params["api"]
+  	p params["tmp"]
+    p params["hum"]
+  else
+  	p "Incomplete data"
+  end
 end
 
 post '/' do
-  p params["foo"]
+  p params["api"]
 end
