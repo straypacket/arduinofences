@@ -1,20 +1,20 @@
-//#include <WiShield.h>
 #include <WiServer.h>
 #include <IRremote.h>
+#include <dht11.h>
 
 int RECV_PIN = 5;
-int BUTTON_PIN = 6;
-int ANALOG_LIGHT_PIN = 1;
+int ANALOG_BUTTON_PIN = 5;
+int ANALOG_LIGHTSENSOR_PIN = 1;
+int ledPin1 = 4;
 
 IRrecv irrecv(RECV_PIN);
 IRsend irsend;
+dht11 DHT11;
 
 decode_results results;
 
 #define WIRELESS_MODE_INFRA	1
 #define WIRELESS_MODE_ADHOC	2
-
-#define ledPin1 4
 
 // Wireless configuration parameters ----------------------------------------
 unsigned char local_ip[] = {10,0,0,50};	// IP address of WiShield
@@ -50,19 +50,23 @@ char stateBuff[4]; //used in text processing around boolToString()
 char numAsCharBuff[2];
 char ledChange;
 
+// Weather
+float prevTemp = 0;
+float prevHumidity = 0;
+
 //---------------------------------------------------------------------------
 
 void setup()
 {
     irrecv.enableIRIn(); // Start the receiver
-    pinMode(BUTTON_PIN, INPUT);
+    DHT11.attach(6);
     Serial.begin(9600);
     
     // Initialize WiServer and have it use the sendMyPage function to serve pages
     pinMode(ledPin1, OUTPUT);
     pinMode(RECV_PIN, INPUT);
-    pinMode(BUTTON_PIN, INPUT);
-    pinMode(ANALOG_LIGHT_PIN, INPUT);
+    pinMode(ANALOG_BUTTON_PIN, INPUT);
+    pinMode(ANALOG_LIGHTSENSOR_PIN, INPUT);
   
     //WiFi.init();
     WiServer.init(sendPage);
@@ -115,7 +119,11 @@ boolean sendPage(char* URL) {
    {
       WiServer.print("<html><head><title>Led switch</title></head>");
     
-      WiServer.print("<body><center>Please select the led state:<center>\n<center>");
+      WiServer.print("<body><center>Temperature: ");
+      WiServer.print(prevTemp);
+      WiServer.print("C</br>Humidity: ");
+      WiServer.print(prevHumidity);
+      WiServer.print("%</br>");
       for (stateCounter = 0; stateCounter < 1; stateCounter++) //for each led
       {
         numAsCharBuff[0] = (char)(stateCounter + 49); //as this is displayed use 1 - 3 rather than 0 - 2
@@ -138,7 +146,7 @@ boolean sendPage(char* URL) {
         WiServer.print(tmpStrCat);
       }
 
-        WiServer.print("</html> ");
+        WiServer.print("</body></html>");
         return true;
    }
    else {
@@ -152,8 +160,7 @@ unsigned long codeValue; // The code value if not raw
 int codeLen; // The length of the code
 int toggle = 0; // The RC5/6 toggle state
 unsigned long sentLockMillis = 0;
-
-int lastButtonState;
+unsigned long tempLockMillis = 0;
 
 // Stores the code for later playback
 // Most of this code is just logging
@@ -231,23 +238,50 @@ void sendCode() {
 void sendCodeOnce() {
   unsigned long time = millis();
 
-  if ( (time - sentLockMillis) > 10000) { //10 seconds
+  if ( (time - sentLockMillis) > 2000) { //2 seconds
     Serial.println("Sending once");
     sendCode();
     sentLockMillis = time;
   }
 }
 
+void readTempHumidity() {
+    unsigned long time = millis();
+    if ( (time - tempLockMillis) > 2000) { //2 seconds
+
+      int chk = DHT11.read();
+
+      switch (chk)
+      {
+        case 0: Serial.println("OK"); break;
+        case -1: Serial.println("Checksum error"); break;
+        case -2: Serial.println("Time out error"); break;
+        default: Serial.println("Unknown error"); break;
+      }
+      
+      prevTemp = (float)DHT11.temperature;
+      prevHumidity = (float)DHT11.humidity;
+      //Serial.println((float)DHT11.humidity, DEC);
+      //Serial.println((float)DHT11.temperature, DEC);
+
+      tempLockMillis = time;
+    }
+}
+
 void loop()
 {
-  int buttonState = digitalRead(BUTTON_PIN);
-  int lightValue = analogRead(ANALOG_LIGHT_PIN);
+  int analogButtonState = analogRead(ANALOG_BUTTON_PIN);
+  int lightValue = analogRead(ANALOG_LIGHTSENSOR_PIN);
   
   if (lightValue < 200) {
     sendCodeOnce();
   }
 
-  if (buttonState == HIGH) {
+  readTempHumidity();
+  
+  // We use analog in as we don't have any other digital
+  // inputs, needed for sensors
+  if (analogButtonState >= 1000) {
     if (irrecv.decode(&results)) {
       storeCode(&results);
       irrecv.resume(); // resume receiver
@@ -257,7 +291,6 @@ void loop()
   else {
     //sendCode();
   }
-  lastButtonState = buttonState;
    
   WiServer.server_task();
 }
