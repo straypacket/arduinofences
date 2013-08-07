@@ -1,6 +1,7 @@
 #include <WiServer.h>
 #include <IRremote.h>
 #include <dht11.h>
+#include <aJSON.h>
 
 int RECV_PIN = 5;
 int ANALOG_BUTTON_PIN = 5;
@@ -12,6 +13,9 @@ IRsend irsend;
 dht11 DHT11;
 
 decode_results results;
+
+#define CR 13
+#define LF 10
 
 #define WIRELESS_MODE_INFRA	1
 #define WIRELESS_MODE_ADHOC	2
@@ -62,19 +66,53 @@ uint8 ip[] = {10,0,0,5};
 // Request to server
 String string_request = String("/?");
 char request[99];
+//char reply[299];
 
 // A request that sends the latest data
 GETrequest getWeather(ip, 4567, "10.0.0.5", request);
 
-// Function that prints data from the server
+// Functions that print data from the server
 void printData(char* data, int len) {
-  
-  // Print the data returned by the server
-  // Note that the data is not null-terminated, may be broken up into smaller packets, and 
-  // includes the HTTP header. 
-  while (len-- > 0) {
-    Serial.print(*(data++));
-  }
+	// Address after the last byte of data
+	char* end = data + len;
+	// Start of current line
+	char* start = data;
+        bool inData = false;
+
+	// Scan through the bytes in the packet looking for a Line Feed character
+	while (data < end) {
+		if (*data == LF) {
+			// Determine the length of the line excluding the Line Feed
+			int lineLength = data - start;
+
+			if (*(data - 1) == CR) {
+				lineLength--;
+			}
+
+			*(start + lineLength) = 0;
+			// Process the line
+                        //Serial.println(String("_") + String(lineLength) + String("_") + start + String("_"));
+                        
+                        // Data starts after an empty line
+                        if (lineLength == 0 && inData == false) {
+                        	inData = true;
+                        }
+                        
+			// Set up for the start of the next line
+			start = ++data;
+		} else {
+			// Go to the next byte
+			data++;
+		}
+	}
+
+        if (inData) {
+                //aJsonObject* jsonObject = aJson.parse(start);
+                // Use as name->valuestring
+                Serial.println(start);
+                // Delete memory:
+                // aJson.deleteItem(root);
+        }
 }
 
 void setup()
@@ -94,7 +132,7 @@ void setup()
     WiServer.enableVerboseMode(false);
     states[0] = false;
     // Have the processData function called when data is returned by the server
-    //getWeather.setReturnFunc(printData);
+    getWeather.setReturnFunc(printData);
 }
 
 void changeStates() {
@@ -198,7 +236,7 @@ void sendCode() {
 void sendCodeOnce() {
   unsigned long time = millis();
 
-  if ( (time - sentLockMillis) > 2000) { //2 seconds
+  if ( (time - sentLockMillis) > 10000) { //10 seconds
     Serial.println("Sending once");
     sendCode();
     sentLockMillis = time;
@@ -207,7 +245,7 @@ void sendCodeOnce() {
 
 void readTempHumidity() {
     unsigned long time = millis();
-    if ( (time - tempLockMillis) > 2000) { //2 seconds
+    if ( (time - tempLockMillis) > 10000) { //10 seconds
 
       int chk = DHT11.read();
 
@@ -241,8 +279,8 @@ void readTempHumidity() {
         dtostrf(prevHumidity, 4, 3, humid);
       }
       
-      string_request = string_request + String("tmp=") + String(temp);
-      string_request = string_request + String("&hum=") + String(humid);
+      //string_request = string_request + String("tmp=") + String(temp);
+      //string_request = string_request + String("&hum=") + String(humid);
       string_request.toCharArray(request,100);
 
       tempLockMillis = time;
@@ -257,7 +295,7 @@ void loop()
   int analogButtonState = analogRead(ANALOG_BUTTON_PIN);
   int lightValue = analogRead(ANALOG_LIGHTSENSOR_PIN);
   
-  if (lightValue < 200) {
+  if (lightValue < 10) {
     sendCodeOnce();
   }
 

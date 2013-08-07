@@ -16,15 +16,21 @@ encoding_options = {
 }
 
 set :bind, '0.0.0.0'
- 
+set :logging, :true
+
+before do
+  puts '[Params]'
+  p params
+end
+
 get '/' do
-  if params["api"] and params["tmp"] and params["hum"]
-    p params["api"]
+  if params["tmp"] and params["hum"]
   	p params["tmp"]
     p params["hum"]
   else
   	p "Incomplete data"
   end
+  return "testing!"
 end
 
 post '/' do
